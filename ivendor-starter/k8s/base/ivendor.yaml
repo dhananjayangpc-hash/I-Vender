@@ -1,0 +1,228 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ivendor
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ivendor-config
+  namespace: ivendor
+data:
+  NODE_ENV: "production"
+  API_PREFIX: "/api/v1"
+  LOG_LEVEL: "info"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ivendor-secrets
+  namespace: ivendor
+type: Opaque
+stringData:
+  # Replace these with actual secrets via sealed-secrets or external-secrets
+  DATABASE_URL: "postgresql://ivendor:changeme@postgres-service:5432/ivendor"
+  S3_ACCESS_KEY: "minioadmin"
+  S3_SECRET_KEY: "minioadmin"
+  MINIO_WEBHOOK_SECRET: "production-secret-change-me"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ivendor-backend
+  namespace: ivendor
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: ivendor-backend
+  template:
+    metadata:
+      labels:
+        app: ivendor-backend
+    spec:
+      containers:
+        - name: backend
+          image: ghcr.io/yourname/ivendor-backend:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 4000
+              name: http
+          envFrom:
+            - configMapRef:
+                name: ivendor-config
+            - secretRef:
+                name: ivendor-secrets
+          env:
+            - name: PORT
+              value: "4000"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 4000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 4000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ivendor-backend-service
+  namespace: ivendor
+spec:
+  type: ClusterIP
+  selector:
+    app: ivendor-backend
+  ports:
+    - port: 80
+      targetPort: 4000
+      protocol: TCP
+      name: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ivendor-frontend
+  namespace: ivendor
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ivendor-frontend
+  template:
+    metadata:
+      labels:
+        app: ivendor-frontend
+    spec:
+      containers:
+        - name: frontend
+          image: ghcr.io/yourname/ivendor-frontend:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3000
+              name: http
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ivendor-frontend-service
+  namespace: ivendor
+spec:
+  type: ClusterIP
+  selector:
+    app: ivendor-frontend
+  ports:
+    - port: 80
+      targetPort: 3000
+      protocol: TCP
+      name: http
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ivendor-ingress
+  namespace: ivendor
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - ivendor.example.com
+      secretName: ivendor-tls
+  rules:
+    - host: ivendor.example.com
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: ivendor-backend-service
+                port:
+                  number: 80
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ivendor-frontend-service
+                port:
+                  number: 80
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: ivendor-backend-hpa
+  namespace: ivendor
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ivendor-backend
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: ivendor-frontend-hpa
+  namespace: ivendor
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ivendor-frontend
+  minReplicas: 1
+  maxReplicas: 5
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 75

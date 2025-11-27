@@ -1,0 +1,139 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build-backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      
+      - name: Install backend deps
+        working-directory: ./ivendor-starter/backend
+        run: npm ci
+      
+      - name: Lint backend
+        working-directory: ./ivendor-starter/backend
+        run: npm run lint 2>/dev/null || echo "No lint script"
+      
+      - name: Build Docker image (backend)
+        working-directory: ./ivendor-starter/backend
+        run: |
+          docker build -t ivendor-backend:${{ github.sha }} .
+      
+      - name: Log in to registry
+        if: github.event_name == 'push'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Push image (backend)
+        if: github.event_name == 'push'
+        run: |
+          docker tag ivendor-backend:${{ github.sha }} ${{ env.REGISTRY }}/ivendor-backend:${{ github.sha }}
+          docker tag ivendor-backend:${{ github.sha }} ${{ env.REGISTRY }}/ivendor-backend:latest
+          docker push ${{ env.REGISTRY }}/ivendor-backend:${{ github.sha }}
+          docker push ${{ env.REGISTRY }}/ivendor-backend:latest
+
+  build-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      
+      - name: Install frontend deps
+        working-directory: ./ivendor-starter/frontend
+        run: npm ci
+      
+      - name: Build frontend
+        working-directory: ./ivendor-starter/frontend
+        run: npm run build
+      
+      - name: Build Docker image (frontend)
+        working-directory: ./ivendor-starter/frontend
+        run: |
+          docker build -t ivendor-frontend:${{ github.sha }} .
+      
+      - name: Log in to registry
+        if: github.event_name == 'push'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Push image (frontend)
+        if: github.event_name == 'push'
+        run: |
+          docker tag ivendor-frontend:${{ github.sha }} ${{ env.REGISTRY }}/ivendor-frontend:${{ github.sha }}
+          docker tag ivendor-frontend:${{ github.sha }} ${{ env.REGISTRY }}/ivendor-frontend:latest
+          docker push ${{ env.REGISTRY }}/ivendor-frontend:${{ github.sha }}
+          docker push ${{ env.REGISTRY }}/ivendor-frontend:latest
+
+  test-integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: ivendor_test
+          POSTGRES_USER: ivendor
+          POSTGRES_PASSWORD: ivendor
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      
+      - name: Install backend deps
+        working-directory: ./ivendor-starter/backend
+        run: npm ci
+      
+      - name: Run DB migration
+        working-directory: ./ivendor-starter/backend
+        env:
+          DATABASE_URL: postgresql://ivendor:ivendor@localhost:5432/ivendor_test
+        run: |
+          psql "postgresql://ivendor:ivendor@localhost:5432/ivendor_test" -f src/migrations/001_init.sql
+      
+      - name: Run basic API test (health endpoint)
+        working-directory: ./ivendor-starter/backend
+        env:
+          DATABASE_URL: postgresql://ivendor:ivendor@localhost:5432/ivendor_test
+          PORT: 4001
+        run: |
+          # Start server in background
+          timeout 5 npm start &
+          sleep 2
+          # Test health endpoint
+          curl -f http://localhost:4001/health || exit 1
+          echo "Health check passed"

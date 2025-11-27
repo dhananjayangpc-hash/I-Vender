@@ -1,0 +1,95 @@
+openapi: 3.1.0
+info:
+  title: I-Vendor API (starter)
+  version: 0.1.0
+servers:
+  - url: http://localhost:4000/api/v1
+paths:
+  /tenants:
+    post:
+      summary: Create tenant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                plan:
+                  type: string
+      responses:
+        '201':
+          description: Tenant created
+  /tenants/{tenantId}/vendors:
+    post:
+      summary: Create vendor (tenant)
+      parameters:
+        - name: tenantId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                primary_contact:
+                  type: object
+      responses:
+        '201':
+          description: Vendor created
+  /tenants/{tenantId}/vendors/{vendorId}/documents:
+    post:
+      summary: Create document and return presigned upload URL
+      parameters:
+        - name: tenantId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: vendorId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                filename:
+                  type: string
+                type:
+                  type: string
+      responses:
+        '201':
+          description: Document created
+  /tenants/{tenantId}/verification/queue:
+    get:
+      summary: Get verification queue (open cases)
+      parameters:
+        - name: tenantId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of verification cases
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+security:
+  - bearerAuth: []

@@ -1,0 +1,55 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+metadata:
+  name: ivendor-prod
+bases:
+  - ../base
+namespace: ivendor-prod
+namePrefix: prod-
+commonLabels:
+  env: production
+patchesStrategicMerge:
+  - |-
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: ivendor-backend
+    spec:
+      replicas: 5
+      template:
+        spec:
+          containers:
+            - name: backend
+              resources:
+                requests:
+                  cpu: 200m
+                  memory: 512Mi
+                limits:
+                  cpu: 1000m
+                  memory: 1Gi
+  - |-
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: ivendor-frontend
+    spec:
+      replicas: 3
+      template:
+        spec:
+          containers:
+            - name: frontend
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 256Mi
+                limits:
+                  cpu: 500m
+                  memory: 512Mi
+secretGenerator:
+  - name: ivendor-secrets
+    behavior: merge
+    literals:
+      - DATABASE_URL=postgresql://ivendor:${DB_PASSWORD}@postgres-prod.default.svc.cluster.local:5432/ivendor
+      - S3_ENDPOINT=https://s3.amazonaws.com
+      - S3_REGION=us-east-1
+      - MINIO_WEBHOOK_SECRET=${WEBHOOK_SECRET}
