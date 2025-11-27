@@ -287,3 +287,49 @@ router.get('/admin/analytics', requireAuth, requireRole('admin'), async (req, re
 });
 
 module.exports = router;
+
+// POST /rewards/convert - Convert points into canteen voucher or fee refund
+router.post('/convert', requireAuth, requireRole('student'), async (req, res, next) => {
+  try {
+    const { target, points } = req.body; // target: 'canteen' | 'cash'
+
+    if (!target || !points || points <= 0) {
+      throw new ValidationError('Target and positive points are required');
+    }
+
+    // Check wallet
+    const walletRes = await query('SELECT id, available_points FROM rewards_wallet WHERE user_id = $1', [req.user.userId]);
+    if (walletRes.rowCount === 0) throw new NotFoundError('Rewards wallet');
+    const wallet = walletRes.rows[0];
+
+    if (wallet.available_points < points) {
+      throw new ValidationError('Insufficient points');
+    }
+
+    // Deduct points
+    await query('INSERT INTO rewards_transactions (user_id, wallet_id, transaction_type, points_amount, reason, related_entity_type, related_entity_id) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+      [req.user.userId, wallet.id, 'redeem', -points, `Convert to ${target}`, 'conversion', null]);
+
+    await query('UPDATE rewards_wallet SET available_points = available_points - $1, last_updated = now() WHERE id = $2', [points, wallet.id]);
+
+    // Create a redemption record for admin processing and tracking
+    const meta = { converted_points: points, target };
+    const redemptionRes = await query(
+      'INSERT INTO rewards_redemptions (user_id, reward_id, status, metadata) VALUES ($1, $2, $3, $4) RETURNING id, status, created_at',
+      [req.user.userId, null, 'pending', JSON.stringify(meta)]
+    );
+
+    // For canteen conversions we also return a simple printable voucher code (for immediate use)
+    // (This is a convenience — admin can choose to approve/record and fulfill.)
+    const voucher = target === 'canteen' ? `CANTEEN-${Math.random().toString(36).slice(2,10).toUpperCase()}` : null;
+
+    res.status(201).json({
+      message: 'Conversion requested',
+      redemption: redemptionRes.rows[0],
+      voucher,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+

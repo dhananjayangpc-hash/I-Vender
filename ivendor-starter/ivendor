@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+# ivendor — simple launcher wrapper for the I-Vendor project
+# Usage: ./ivendor start|stop|status|seed|logs
+set -e
+ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
+COMPOSE_FILE="$ROOT_DIR/docker-compose.yml"
+
+usage() {
+  echo "Usage: $0 {start|stop|status|seed|logs|restart}" >&2
+  exit 1
+}
+
+start() {
+  echo "Starting I-Vendor stack..."
+  docker compose -f "$COMPOSE_FILE" up -d --build
+  echo "Waiting for backend..."
+  retries=0
+  until curl -s http://localhost:3000/health > /dev/null 2>&1 || [ $retries -gt 30 ]; do
+    sleep 2; retries=$((retries+1)); echo -n ".";
+  done
+  echo
+  if curl -s http://localhost:3000/health > /dev/null 2>&1; then
+    echo "Backend healthy"
+  else
+    echo "Backend did not become healthy after wait"
+  fi
+}
+
+stop() {
+  echo "Stopping I-Vendor stack..."
+  docker compose -f "$COMPOSE_FILE" down
+}
+
+status() {
+  echo "Docker Compose status:"
+  docker compose -f "$COMPOSE_FILE" ps
+  echo
+  echo "Backend health:"
+  curl -s http://localhost:3000/health || true
+}
+
+seed() {
+  echo "Triggering seed endpoint..."
+  curl -s -X POST http://localhost:3000/api/v1/seed -w "\nHTTP_STATUS:%{http_code}\n"
+}
+
+logs() {
+  docker compose -f "$COMPOSE_FILE" logs --no-color --tail 200
+}
+
+case "$1" in
+  start) start ;;
+  stop) stop ;;
+  status) status ;;
+  seed) seed ;;
+  logs) logs ;;
+  restart) stop && start ;;
+  *) usage ;;
+esac

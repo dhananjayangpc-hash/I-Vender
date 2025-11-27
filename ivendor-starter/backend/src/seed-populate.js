@@ -178,6 +178,10 @@ class SeedEngine {
         { name: 'Free Mentor Session', description: '1-hour session', points: 250, qty: 100 }
       ];
 
+      // Add canteen voucher and cash/fee refund options so students can convert points
+      rewards.push({ name: 'Canteen Voucher ₹50', description: 'Redeemable at college canteen', points: 200, qty: 500 });
+      rewards.push({ name: 'Fee Refund (Partial)', description: 'Apply as partial fee refund', points: 2000, qty: 50 });
+
       for (const reward of rewards) {
         // Map reward types to schema's allowed values
         const type = reward.name.includes('Gift Card') ? 'coupon' : (reward.name.includes('Mentor') ? 'lab_access' : 'merchandise');
