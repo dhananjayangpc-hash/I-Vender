@@ -1,50 +1,67 @@
 version: '3.8'
+
 services:
-  db:
-    image: postgres:15
+  postgres:
+    image: postgres:15-alpine
+    container_name: ivendor-db
     environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
       POSTGRES_DB: ivendor
-      POSTGRES_USER: ivendor
-      POSTGRES_PASSWORD: ivendor
     ports:
       - "5432:5432"
     volumes:
-      - db-data:/var/lib/postgresql/data
-  adminer:
-    image: adminer
-    restart: always
-    ports:
-      - "8080:8080"
-  minio:
-    image: minio/minio:RELEASE.2025-03-01T00-00-00Z
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/src/migrations/001_init.sql:/docker-entrypoint-initdb.d/01-init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ivendor-api
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
-    command: server /data --console-address ":9001"
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ivendor
+      NODE_ENV: development
+      PORT: 3000
     ports:
-      - "9000:9000"
-      - "9001:9001"
-    volumes:
-      - minio-data:/data
-  minio-init:
-    image: minio/mc
+      - "3000:3000"
     depends_on:
-      - minio
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./backend/src:/app/src
+    command: npm start
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: ivendor-web
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend/src:/app/src
     environment:
-      MINIO_WEBHOOK_SECRET: ivendor_local_secret
-    entrypoint: ["/bin/sh", "-c"]
-    command: |
-      # wait for MinIO to be reachable, then create bucket if missing
-      for i in 1 2 3 4 5 6 7 8 9 10; do
-        mc alias set local http://minio:9000 minioadmin minioadmin && break || sleep 1;
-      done
-      mc alias set local http://minio:9000 minioadmin minioadmin || exit 1
-      mc mb --ignore-existing local/ivendor-bucket || true
-      # configure MinIO to send object create events to the backend running on the host
-      # include secret as query parameter so backend can validate
-      WEBHOOK_URL="http://host.docker.internal:4000/webhooks/minio?secret=${MINIO_WEBHOOK_SECRET}"
-      mc event add local/ivendor-bucket arn:minio:sqs::${WEBHOOK_URL} --event put || true
-    restart: "no"
+      VITE_API_URL: http://localhost:3000
+    command: npm run dev
+
 volumes:
-  db-data:
-  minio-data:
+  postgres_data:
+
+networks:
+  default:
+    name: ivendor-network

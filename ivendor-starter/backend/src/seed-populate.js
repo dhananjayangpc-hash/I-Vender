@@ -1,312 +1,208 @@
-// I-Vender Phase-4 Seed Data Population Engine
-// Handles database population and reset operations
-
-const { query } = require('./db');
+// Seed Population Engine for I-Vendor Platform
 const seedData = require('./seed-data');
 
 class SeedEngine {
-  constructor() {
-    this.stats = {
-      vendors: 0,
-      projects: 0,
-      team_members: 0,
-      institutions: 0,
-      requests: 0,
-      documents: 0,
-      total: 0,
-    };
-  }
-
-  async resetDatabase() {
-    console.log('🔄 Resetting database...');
-    try {
-      // Delete in reverse order of foreign key dependencies
-      await query('TRUNCATE TABLE documents CASCADE');
-      await query('TRUNCATE TABLE requests CASCADE');
-      await query('TRUNCATE TABLE team_members CASCADE');
-      await query('TRUNCATE TABLE projects CASCADE');
-      await query('TRUNCATE TABLE institutions CASCADE');
-      await query('TRUNCATE TABLE vendors CASCADE');
-      console.log('✅ Database reset successfully');
-      return true;
-    } catch (err) {
-      console.error('❌ Error resetting database:', err.message);
-      throw err;
-    }
-  }
-
-  async populateVendors() {
-    console.log('📝 Populating vendors...');
-    try {
-      for (const vendor of seedData.vendors) {
-        await query(
-          `INSERT INTO vendors (id, name, email, status, industry, website, description, 
-           contact_person, phone, budget_range_min, budget_range_max, verified, 
-           established_year, team_size, metadata) 
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
-          [
-            vendor.id,
-            vendor.name,
-            vendor.email,
-            vendor.status,
-            vendor.industry,
-            vendor.website,
-            vendor.description,
-            vendor.contact_person,
-            vendor.phone,
-            vendor.budget_range_min,
-            vendor.budget_range_max,
-            vendor.verified,
-            vendor.established_year,
-            vendor.team_size,
-            JSON.stringify(vendor.metadata),
-          ]
-        );
-      }
-      this.stats.vendors = seedData.vendors.length;
-      console.log(`✅ Populated ${seedData.vendors.length} vendors`);
-    } catch (err) {
-      console.error('❌ Error populating vendors:', err.message);
-      throw err;
-    }
-  }
-
-  async populateProjects() {
-    console.log('📝 Populating projects...');
-    try {
-      for (const project of seedData.projects) {
-        await query(
-          `INSERT INTO projects (id, title, description, vendor_id, budget, timeline_weeks, status, 
-           difficulty, required_skills, tags, deliverables, team_requirements, start_date, end_date, metadata) 
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
-          [
-            project.id,
-            project.title,
-            project.description,
-            project.vendor_id,
-            project.budget,
-            project.timeline_weeks,
-            project.status,
-            project.difficulty,
-            JSON.stringify(project.required_skills),
-            JSON.stringify(project.tags),
-            JSON.stringify(project.deliverables),
-            project.team_requirements,
-            project.start_date,
-            project.end_date,
-            JSON.stringify(project.metadata),
-          ]
-        );
-      }
-      this.stats.projects = seedData.projects.length;
-      console.log(`✅ Populated ${seedData.projects.length} projects`);
-    } catch (err) {
-      console.error('❌ Error populating projects:', err.message);
-      throw err;
-    }
-  }
-
-  async populateTeamMembers() {
-    console.log('📝 Populating team members...');
-    try {
-      for (const member of seedData.team_members) {
-        await query(
-          `INSERT INTO team_members (id, name, title, company, email, phone, experience_years, 
-           hourly_rate, skills, specialization, bio, rating, total_projects, github, linkedin, verified, metadata) 
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
-          [
-            member.id,
-            member.name,
-            member.title,
-            member.company,
-            member.email,
-            member.phone,
-            member.experience_years,
-            member.hourly_rate,
-            JSON.stringify(member.skills),
-            member.specialization,
-            member.bio,
-            member.rating,
-            member.total_projects,
-            member.github,
-            member.linkedin,
-            member.verified,
-            JSON.stringify(member.metadata),
-          ]
-        );
-      }
-      this.stats.team_members = seedData.team_members.length;
-      console.log(`✅ Populated ${seedData.team_members.length} team members`);
-    } catch (err) {
-      console.error('❌ Error populating team members:', err.message);
-      throw err;
-    }
-  }
-
-  async populateInstitutions() {
-    console.log('📝 Populating institutions...');
-    try {
-      for (const institution of seedData.institutions) {
-        await query(
-          `INSERT INTO institutions (id, name, type, location, website, email, phone, established_year, 
-           student_count, faculty_count, accreditation, specializations, partnerships, metadata) 
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
-          [
-            institution.id,
-            institution.name,
-            institution.type,
-            institution.location,
-            institution.website,
-            institution.email,
-            institution.phone,
-            institution.established_year,
-            institution.student_count,
-            institution.faculty_count,
-            institution.accreditation,
-            JSON.stringify(institution.specializations),
-            JSON.stringify(institution.partnerships),
-            JSON.stringify(institution.metadata),
-          ]
-        );
-      }
-      this.stats.institutions = seedData.institutions.length;
-      console.log(`✅ Populated ${seedData.institutions.length} institutions`);
-    } catch (err) {
-      console.error('❌ Error populating institutions:', err.message);
-      throw err;
-    }
-  }
-
-  async populateRequests() {
-    console.log('📝 Populating requests...');
-    try {
-      for (const request of seedData.requests) {
-        await query(
-          `INSERT INTO requests (id, institution_id, project_id, vendor_id, requested_by, status, 
-           request_type, created_at, updated_at, proposal_details, budget_allocated, 
-           timeline_approved, metadata) 
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
-          [
-            request.id,
-            request.institution_id,
-            request.project_id,
-            request.vendor_id,
-            request.requested_by,
-            request.status,
-            request.request_type,
-            request.created_at,
-            request.updated_at,
-            request.proposal_details,
-            request.budget_allocated,
-            request.timeline_approved,
-            JSON.stringify(request.metadata),
-          ]
-        );
-      }
-      this.stats.requests = seedData.requests.length;
-      console.log(`✅ Populated ${seedData.requests.length} requests`);
-    } catch (err) {
-      console.error('❌ Error populating requests:', err.message);
-      throw err;
-    }
-  }
-
-  async populateDocuments() {
-    console.log('📝 Populating documents...');
-    try {
-      for (const document of seedData.documents) {
-        await query(
-          `INSERT INTO documents (id, vendor_id, document_type, filename, s3_key, status, 
-           uploaded_at, verified_at, verified_by, file_size, checksum, metadata) 
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
-          [
-            document.id,
-            document.vendor_id,
-            document.document_type,
-            document.filename,
-            document.s3_key,
-            document.status,
-            document.uploaded_at,
-            document.verified_at,
-            document.verified_by,
-            document.file_size,
-            document.checksum,
-            JSON.stringify(document.metadata),
-          ]
-        );
-      }
-      this.stats.documents = seedData.documents.length;
-      console.log(`✅ Populated ${seedData.documents.length} documents`);
-    } catch (err) {
-      console.error('❌ Error populating documents:', err.message);
-      throw err;
-    }
+  constructor(pool) {
+    this.pool = pool;
   }
 
   async populate() {
-    console.log('\n╔════════════════════════════════════════╗');
-    console.log('║   I-VENDER PHASE-4 SEED DATA ENGINE   ║');
-    console.log('╚════════════════════════════════════════╝\n');
-
-    const startTime = Date.now();
-
+    const client = await this.pool.connect();
     try {
-      await this.populateVendors();
-      await this.populateProjects();
-      await this.populateTeamMembers();
-      await this.populateInstitutions();
-      await this.populateRequests();
-      await this.populateDocuments();
+      await client.query('BEGIN');
+      
+      // Get department IDs
+      const deptResult = await client.query('SELECT id, name FROM departments');
+      const deptMap = {};
+      deptResult.rows.forEach(d => deptMap[d.name] = d.id);
 
-      this.stats.total =
-        this.stats.vendors +
-        this.stats.projects +
-        this.stats.team_members +
-        this.stats.institutions +
-        this.stats.requests +
-        this.stats.documents;
+      // Get idea source IDs
+      const sourceResult = await client.query('SELECT id, name FROM idea_sources');
+      const sourceMap = {};
+      sourceResult.rows.forEach(s => sourceMap[s.name] = s.id);
 
-      const duration = ((Date.now() - startTime) / 1000).toFixed(2);
-
-      console.log('\n✅ SEED DATA POPULATION COMPLETE\n');
-      console.log('📊 Summary:');
-      console.log(`   • Vendors: ${this.stats.vendors}`);
-      console.log(`   • Projects: ${this.stats.projects}`);
-      console.log(`   • Team Members: ${this.stats.team_members}`);
-      console.log(`   • Institutions: ${this.stats.institutions}`);
-      console.log(`   • Requests: ${this.stats.requests}`);
-      console.log(`   • Documents: ${this.stats.documents}`);
-      console.log(`   ─────────────────────────────`);
-      console.log(`   • TOTAL RECORDS: ${this.stats.total}`);
-      console.log(`   • Time: ${duration}s\n`);
-
-      return this.stats;
-    } catch (err) {
-      console.error('\n❌ Seed population failed:', err.message);
-      throw err;
-    }
-  }
-
-  async getStatus() {
-    try {
-      const status = {
-        timestamp: new Date().toISOString(),
-        tables: {},
-      };
-
-      const tables = ['vendors', 'projects', 'team_members', 'institutions', 'requests', 'documents'];
-
-      for (const table of tables) {
-        const result = await query(`SELECT COUNT(*) as count FROM ${table}`);
-        status.tables[table] = parseInt(result.rows[0].count);
+      // Seed ideas
+      for (const idea of seedData.ideas) {
+        await client.query(
+          `INSERT INTO ideas (title, problem_statement, concept_overview, department_id, idea_source_id, 
+           difficulty, estimated_time_weeks, estimated_cost, budget_min, budget_max, 
+           time_min_weeks, time_max_weeks, category, status)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+          [
+            idea.title,
+            idea.problem_statement,
+            idea.problem_statement,
+            deptMap[idea.department_name],
+            sourceMap[idea.source_name] || sourceMap['AI Generated'],
+            idea.difficulty,
+            idea.estimated_time_weeks,
+            idea.estimated_cost,
+            idea.budget_min,
+            idea.budget_max,
+            idea.estimated_time_weeks - 2,
+            idea.estimated_time_weeks + 2,
+            idea.category,
+            'active'
+          ]
+        );
       }
 
-      status.total_records = Object.values(status.tables).reduce((a, b) => a + b, 0);
+      // Seed mentors
+      for (const mentor of seedData.mentors) {
+        await client.query(
+          `INSERT INTO mentors (name, email, specializations, experience_years, hourly_rate, verification_status)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+          [
+            mentor.name,
+            mentor.email,
+            JSON.stringify(mentor.specializations),
+            mentor.experience_years,
+            mentor.hourly_rate,
+            'verified'
+          ]
+        );
+      }
 
-      return status;
+      // Seed material vendors
+      const vendorIds = {};
+      for (const vendor of seedData.vendors) {
+        const result = await client.query(
+          `INSERT INTO material_vendors (name, shop_type, location, commission_percentage, verification_status)
+           VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+          [
+            vendor.name,
+            vendor.shop_type,
+            vendor.location,
+            vendor.commission_percentage,
+            'verified'
+          ]
+        );
+        vendorIds[vendor.name] = result.rows[0].id;
+      }
+
+      // Seed materials
+      const materials = [
+        { name: 'Arduino Uno', category: 'Microcontroller', price: 400, qty: 50, vendor: 'ElectroHub Electronics' },
+        { name: 'Raspberry Pi 4', category: 'SBC', price: 4500, qty: 30, vendor: 'ElectroHub Electronics' },
+        { name: 'DHT22 Sensor', category: 'Sensor', price: 250, qty: 200, vendor: 'ElectroHub Electronics' },
+        { name: 'DC Motor 12V', category: 'Motor', price: 350, qty: 100, vendor: 'MechaniX Hardware' },
+        { name: 'Servo Motor', category: 'Actuator', price: 600, qty: 75, vendor: 'MechaniX Hardware' },
+        { name: 'Stepper Motor NEMA 23', category: 'Motor', price: 2500, qty: 40, vendor: 'MechaniX Hardware' },
+        { name: 'CNC Router Bit', category: 'Tooling', price: 1500, qty: 50, vendor: '3D Print Pro' },
+        { name: '3D Filament PLA', category: 'Consumables', price: 800, qty: 200, vendor: '3D Print Pro' },
+        { name: 'Solar Panel 100W', category: 'Energy', price: 8000, qty: 15, vendor: 'Rajesh\'s Solar Equipment' },
+        { name: 'Li-Po Battery Pack', category: 'Battery', price: 1200, qty: 100, vendor: 'ElectroHub Electronics' },
+        { name: 'Webcam HD', category: 'Sensor', price: 2000, qty: 40, vendor: 'ElectroHub Electronics' },
+        { name: 'Drone Frame Kit', category: 'Drones', price: 8500, qty: 20, vendor: 'Vikram\'s Drone Components' },
+        { name: 'Flight Controller', category: 'Electronics', price: 3500, qty: 30, vendor: 'Vikram\'s Drone Components' }
+      ];
+
+      for (const material of materials) {
+        await client.query(
+          `INSERT INTO materials (name, category, unit_price, stock_quantity, material_vendor_id, status)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+          [
+            material.name,
+            material.category,
+            material.price,
+            material.qty,
+            vendorIds[material.vendor],
+            'available'
+          ]
+        );
+      }
+
+      // Seed service bundles
+      const bundles = [
+        { name: 'Robotics Kit', description: 'Complete beginner', price: 15000, type: 'kit' },
+        { name: 'IoT Sensor Kit', description: 'IoT prototyping', price: 5000, type: 'kit' },
+        { name: 'CNC Service', description: 'Professional cutting', price: 8000, type: 'service' },
+        { name: '3D Printing', description: 'Professional printing', price: 5000, type: 'service' },
+        { name: 'Lab Access', description: '1 month rental', price: 10000, type: 'rental' }
+      ];
+
+      for (const bundle of bundles) {
+        await client.query(
+          `INSERT INTO service_bundles (name, description, price, bundle_type, status)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [
+            bundle.name,
+            bundle.description,
+            bundle.price,
+            bundle.type,
+            'available'
+          ]
+        );
+      }
+
+      // Seed RBVM machines
+      for (let i = 1; i <= 5; i++) {
+        await client.query(
+          `INSERT INTO rbvm_machines (machine_code, location, points_per_bottle, status)
+           VALUES ($1, $2, $3, $4)`,
+          [`RBVM-00${i}`, ['Main Entrance', 'Cafeteria', 'Library', 'Sports', 'Tech Center'][i-1], 5, 'active']
+        );
+      }
+
+      // Seed rewards
+      const rewards = [
+        { name: 'T-Shirt', description: 'Branded shirt', points: 100, qty: 50 },
+        { name: 'Water Bottle', description: 'Eco bottle', points: 150, qty: 100 },
+        { name: 'Headphones', description: 'Wireless', points: 500, qty: 20 },
+        { name: 'Gift Card ₹1000', description: 'Amazon card', points: 600, qty: 30 },
+        { name: 'Free Mentor Session', description: '1-hour session', points: 250, qty: 100 }
+      ];
+
+      for (const reward of rewards) {
+        await client.query(
+          `INSERT INTO rewards_catalog (name, description, points_required, quantity_available, status)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [
+            reward.name,
+            reward.description,
+            reward.points,
+            reward.qty,
+            'available'
+          ]
+        );
+      }
+
+      // Seed users
+      for (const student of seedData.students) {
+        const deptId = deptMap[student.department_name];
+        const userId = await client.query(
+          `INSERT INTO users (name, email, department_id, role, status)
+           VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+          [
+            student.name,
+            student.email,
+            deptId,
+            'student',
+            'active'
+          ]
+        );
+
+        await client.query(
+          `INSERT INTO rewards_wallet (user_id, total_points, available_points, tier, status)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [
+            userId.rows[0].id,
+            Math.floor(Math.random() * 1000) + 200,
+            Math.floor(Math.random() * 800) + 100,
+            'bronze',
+            'active'
+          ]
+        );
+      }
+
+      await client.query('COMMIT');
+      console.log('✓ Database seeded successfully');
     } catch (err) {
-      console.error('Error getting seed status:', err.message);
+      await client.query('ROLLBACK');
+      console.error('✗ Seed error:', err.message);
       throw err;
+    } finally {
+      client.release();
     }
   }
 }

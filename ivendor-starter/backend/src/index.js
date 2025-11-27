@@ -1,122 +1,208 @@
-require('dotenv').config();
+// I-Vendor Platform: Express Backend Server
 const express = require('express');
-const bodyParser = require('body-parser');
-const { initDb } = require('./db');
-const { requireAuth } = require('./utils/auth');
-
-// Import route modules
-const authRoutes = require('./auth/routes');
-const attendanceRoutes = require('./attendance/routes');
-const projectsRoutes = require('./projects/routes');
-const mentorsRoutes = require('./mentors/routes');
-const cleanlinessRoutes = require('./cleanliness/routes');
-const rewardsRoutes = require('./rewards/routes');
-const dashboardRoutes = require('./dashboard/routes');
-const seedRoutes = require('./seed/routes');
+const { Pool } = require('pg');
+const cors = require('cors');
 
 const app = express();
-app.use(bodyParser.json());
+const pool = new Pool({
+  user: process.env.DB_USER || 'postgres',
+  password: process.env.DB_PASSWORD || 'postgres',
+  host: process.env.DB_HOST || 'localhost',
+  port: process.env.DB_PORT || 5432,
+  database: process.env.DB_NAME || 'ivendor'
+});
 
-// CORS and middleware
+// Middleware
+app.use(cors());
+app.use(express.json());
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  if (req.method === 'OPTIONS') return res.sendStatus(200);
+  req.pool = pool;
   next();
 });
 
-const API_PREFIX = '/api/v1';
-
 // Health check
-app.get('/health', (req, res) => res.json({ status: 'ok', service: 'I-Vender Campus Platform' }));
-
-// ============== SEED DATA ROUTES (Phase-4) ==============
-app.use(`${API_PREFIX}/seed`, seedRoutes);
-
-// ============== I-VENDER MODULE ROUTES ==============
-
-// Authentication Routes
-app.use(`${API_PREFIX}/auth`, authRoutes);
-
-// Smart Attendance Routes
-app.use(`${API_PREFIX}/attendance`, requireAuth, attendanceRoutes);
-
-// AI Project Vending Routes
-app.use(`${API_PREFIX}/projects`, projectsRoutes);
-
-// Alumni Mentorship Routes
-app.use(`${API_PREFIX}/mentors`, mentorsRoutes);
-
-// Cleanliness Monitoring Routes
-app.use(`${API_PREFIX}/cleanliness`, cleanlinessRoutes);
-
-// Loyalty & Rewards Routes
-app.use(`${API_PREFIX}/rewards`, rewardsRoutes);
-
-// Dashboard & Analytics Routes
-app.use(`${API_PREFIX}/dashboard`, dashboardRoutes);
-
-// ============== ERROR HANDLING ==============
-
-// 404 handler
-app.use((req, res) => {
-  res.status(404).json({ error: 'Endpoint not found' });
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Global error handler
-app.use((err, req, res, next) => {
-  console.error('Error:', err);
-
-  if (err.name === 'ValidationError') {
-    return res.status(err.status || 400).json({ error: err.message, details: err.details });
+// Seed endpoint
+app.post('/api/v1/seed', async (req, res) => {
+  try {
+    const SeedEngine = require('./seed-populate');
+    const seedEngine = new SeedEngine(pool);
+    await seedEngine.populate();
+    res.json({ message: 'Database seeded successfully' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
-
-  if (err.name === 'AuthenticationError' || err.name === 'AuthorizationError') {
-    return res.status(err.status || 401).json({ error: err.message });
-  }
-
-  if (err.name === 'NotFoundError') {
-    return res.status(err.status || 404).json({ error: err.message });
-  }
-
-  if (err.name === 'ConflictError') {
-    return res.status(err.status || 409).json({ error: err.message });
-  }
-
-  res.status(err.status || 500).json({ error: err.message || 'Internal server error' });
 });
 
-// ============== SERVER START ==============
+// Ideas API
+app.get('/api/v1/ideas', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM ideas WHERE status = $1 LIMIT 50', ['active']);
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
-const PORT = process.env.PORT || 4000;
-initDb()
-  .then(() => {
-    app.listen(PORT, () => {
-      console.log(`
-╔══════════════════════════════════════════════════════╗
-║    I-VENDER PHASE-4 BACKEND SERVER                 ║
-║  Enterprise Partnership & Project Management       ║
-╚══════════════════════════════════════════════════════╝
+app.get('/api/v1/ideas/:id', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM ideas WHERE id = $1', [req.params.id]);
+    res.json(result.rows[0] || { error: 'Not found' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
-🚀 Backend Server Running on Port ${PORT}
+app.post('/api/v1/ideas/select', async (req, res) => {
+  try {
+    const { user_id, idea_id, budget } = req.body;
+    const result = await pool.query(
+      'INSERT INTO project_instances (user_id, idea_id, status, budget_allocated) VALUES ($1, $2, $3, $4) RETURNING *',
+      [user_id, idea_id, 'active', budget]
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
-📚 Available Modules:
-  ✓ Smart Attendance (RFID/Face Recognition)
-  ✓ AI Project Vending (Personalized Recommendations)
-  ✓ Alumni Mentorship Marketplace
-  ✓ Cleanliness Monitoring System
-  ✓ Loyalty & Rewards System
-  ✓ Unified Campus Dashboard
-  ✓ Seed Data Management
+// Mentors API
+app.get('/api/v1/mentors', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM mentors LIMIT 20');
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
-🔗 API Prefix: ${API_PREFIX}
-🏥 Health Check: GET /health
+app.post('/api/v1/mentors/book', async (req, res) => {
+  try {
+    const { user_id, mentor_id, session_date } = req.body;
+    const result = await pool.query(
+      'INSERT INTO mentor_sessions (user_id, mentor_id, session_date, status) VALUES ($1, $2, $3, $4) RETURNING *',
+      [user_id, mentor_id, session_date, 'scheduled']
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
-      `);
+// Vendors & Materials API
+app.get('/api/v1/vendors', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM material_vendors LIMIT 20');
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/v1/materials', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM materials WHERE status = $1 LIMIT 50', ['available']);
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/v1/vendors/order', async (req, res) => {
+  try {
+    const { user_id, vendor_id, items, total } = req.body;
+    const result = await pool.query(
+      'INSERT INTO material_orders (user_id, material_vendor_id, total_amount, status) VALUES ($1, $2, $3, $4) RETURNING *',
+      [user_id, vendor_id, total, 'pending']
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Attendance API
+app.post('/api/v1/attendance/checkin', async (req, res) => {
+  try {
+    const { user_id, mode } = req.body;
+    const result = await pool.query(
+      'INSERT INTO attendance_logs (user_id, attendance_mode, status) VALUES ($1, $2, $3) RETURNING *',
+      [user_id, mode || 'manual', 'verified']
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Cleanliness API
+app.post('/api/v1/cleanliness/report', async (req, res) => {
+  try {
+    const { user_id, issue_type, location } = req.body;
+    const result = await pool.query(
+      'INSERT INTO cleanliness_reports (user_id, issue_type, location, status) VALUES ($1, $2, $3, $4) RETURNING *',
+      [user_id, issue_type, location, 'reported']
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// RBVM API
+app.post('/api/v1/rbvm/return', async (req, res) => {
+  try {
+    const { user_id, machine_code, bottles_count } = req.body;
+    const result = await pool.query(
+      'INSERT INTO rbvm_transactions (user_id, bottles_count, points_earned) VALUES ($1, $2, $3) RETURNING *',
+      [user_id, bottles_count, bottles_count * 5]
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Rewards API
+app.get('/api/v1/rewards/wallet/:user_id', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM rewards_wallet WHERE user_id = $1', [req.params.user_id]);
+    res.json(result.rows[0] || { error: 'Not found' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/v1/rewards/catalog', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM rewards_catalog LIMIT 20');
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Admin Dashboard
+app.get('/api/v1/admin/dashboard', async (req, res) => {
+  try {
+    const ideas = await pool.query('SELECT COUNT(*) FROM ideas');
+    const users = await pool.query('SELECT COUNT(*) FROM users WHERE role = $1', ['student']);
+    res.json({
+      total_ideas: ideas.rows[0].count,
+      total_students: users.rows[0].count,
+      timestamp: new Date().toISOString()
     });
-  })
-  .catch((err) => {
-    console.error('Failed to initialize DB', err);
-    process.exit(1);
-  });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`✓ I-Vendor API on port ${PORT}`);
+});
+
+module.exports = app;
