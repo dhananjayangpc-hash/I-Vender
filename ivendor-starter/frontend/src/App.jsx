@@ -1,39 +1,178 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { Routes, Route, Link, useLocation } from 'react-router-dom';
 import HomePage from './pages/Home';
-import './styles.css';
+import { Dashboard } from './pages/Dashboard';
+import { RewardsCatalog } from './pages/RewardsCatalog';
+import { ConversionForm } from './pages/ConversionForm';
+import { TransactionHistory } from './pages/TransactionHistory';
+import { AdminPanel } from './pages/AdminPanel';
+import './App.css';
 
 function App() {
-  const [currentPage, setCurrentPage] = useState('home');
-  const [user, setUser] = useState({ id: '1', name: 'Rahul Patel', role: 'student' });
+  const [user, setUser] = useState(null);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    const savedUser = localStorage.getItem('user');
+    if (token && savedUser) {
+      setIsLoggedIn(true);
+      setUser(JSON.parse(savedUser));
+    }
+  }, []);
+
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    setIsLoggedIn(false);
+    setUser(null);
+  };
+
+  if (!isLoggedIn) {
+    return (
+      <div className="app auth-page">
+        <div className="auth-container">
+          <h1>💡 I-Vendor</h1>
+          <p>Idea Vending Machine for Engineering Students</p>
+          <LoginForm onLogin={(userData) => {
+            setUser(userData);
+            setIsLoggedIn(true);
+          }} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="app">
-      <nav className="navbar">
-        <h1>💡 I-Vendor</h1>
-        <div className="nav-links">
-          <button onClick={() => setCurrentPage('home')}>Home</button>
-          <button onClick={() => setCurrentPage('ideas')}>Ideas</button>
-          <button onClick={() => setCurrentPage('mentors')}>Mentors</button>
-          <button onClick={() => setCurrentPage('materials')}>Materials</button>
-          <button onClick={() => setCurrentPage('rewards')}>Rewards</button>
-          <button onClick={() => setCurrentPage('attendance')}>Attendance</button>
-          <span>�� {user.name}</span>
-        </div>
-      </nav>
-
-      <main className="container">
-        {currentPage === 'home' && <HomePage />}
-        {currentPage === 'ideas' && <IdeasPage />}
-        {currentPage === 'mentors' && <MentorsPage />}
-        {currentPage === 'materials' && <MaterialsPage />}
-        {currentPage === 'rewards' && <RewardsPage />}
-        {currentPage === 'attendance' && <AttendancePage />}
+      <Navbar user={user} onLogout={handleLogout} />
+      <main className="main-content">
+        <Routes>
+          <Route path="/" element={<Dashboard />} />
+          <Route path="/home" element={<HomePage />} />
+          <Route path="/rewards-catalog" element={<RewardsCatalog />} />
+          <Route path="/convert" element={<ConversionForm />} />
+          <Route path="/history" element={<TransactionHistory />} />
+          <Route path="/admin" element={<AdminPanel />} />
+          <Route path="/ideas" element={<IdeasPage />} />
+          <Route path="/mentors" element={<MentorsPage />} />
+          <Route path="/materials" element={<MaterialsPage />} />
+          <Route path="/attendance" element={<AttendancePage />} />
+        </Routes>
       </main>
-
-      <footer className="footer">
-        <p>© 2024 I-Vendor Platform | Idea Vending Machine for Engineering Students</p>
-      </footer>
+      <Footer />
     </div>
+  );
+}
+
+function Navbar({ user, onLogout }) {
+  const location = useLocation();
+
+  const isActive = (path) => location.pathname === path ? 'active' : '';
+
+  return (
+    <nav className="navbar">
+      <div className="navbar-brand">
+        <Link to="/">
+          <h1>💡 I-Vendor</h1>
+        </Link>
+      </div>
+
+      <div className="navbar-menu">
+        <Link to="/home" className={`nav-link ${isActive('/home')}`}>Home</Link>
+        <Link to="/rewards-catalog" className={`nav-link ${isActive('/rewards-catalog')}`}>Rewards</Link>
+        <Link to="/convert" className={`nav-link ${isActive('/convert')}`}>Convert Points</Link>
+        <Link to="/history" className={`nav-link ${isActive('/history')}`}>History</Link>
+        <Link to="/ideas" className={`nav-link ${isActive('/ideas')}`}>Ideas</Link>
+        <Link to="/mentors" className={`nav-link ${isActive('/mentors')}`}>Mentors</Link>
+
+        {user?.role === 'mentor' && (
+          <Link to="/admin" className={`nav-link ${isActive('/admin')}`}>Admin</Link>
+        )}
+      </div>
+
+      <div className="navbar-user">
+        <span className="user-info">🧑‍🎓 {user?.name}</span>
+        <button className="btn-logout" onClick={onLogout}>Logout</button>
+      </div>
+    </nav>
+  );
+}
+
+function LoginForm({ onLogin }) {
+  const [formData, setFormData] = useState({ email: '', password: '' });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+
+    try {
+      const response = await fetch('http://localhost:3000/api/v1/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('user', JSON.stringify(data.user));
+        onLogin(data.user);
+      } else {
+        const errData = await response.json();
+        setError(errData.error || 'Login failed');
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <form className="login-form" onSubmit={handleSubmit}>
+      {error && <div className="error-banner">{error}</div>}
+
+      <div className="form-group">
+        <label htmlFor="email">Email</label>
+        <input
+          id="email"
+          type="email"
+          name="email"
+          value={formData.email}
+          onChange={handleInputChange}
+          placeholder="your@email.com"
+          required
+        />
+      </div>
+
+      <div className="form-group">
+        <label htmlFor="password">Password</label>
+        <input
+          id="password"
+          type="password"
+          name="password"
+          value={formData.password}
+          onChange={handleInputChange}
+          placeholder="Password"
+          required
+        />
+      </div>
+
+      <button type="submit" disabled={loading} className="btn btn-primary btn-large">
+        {loading ? 'Logging in...' : 'Login'}
+      </button>
+
+      <p className="demo-hint">Demo: student@example.com / password123</p>
+    </form>
   );
 }
 
@@ -42,7 +181,9 @@ function IdeasPage() {
   const [loading, setLoading] = React.useState(true);
 
   React.useEffect(() => {
-    fetch('http://localhost:3000/api/v1/ideas')
+    fetch('http://localhost:3000/api/v1/ideas', {
+      headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+    })
       .then(r => r.json())
       .then(d => { setIdeas(d); setLoading(false); })
       .catch(e => console.error(e));
@@ -74,7 +215,9 @@ function MentorsPage() {
   const [mentors, setMentors] = React.useState([]);
 
   React.useEffect(() => {
-    fetch('http://localhost:3000/api/v1/mentors')
+    fetch('http://localhost:3000/api/v1/mentors', {
+      headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+    })
       .then(r => r.json())
       .then(d => setMentors(d))
       .catch(e => console.error(e));
@@ -103,7 +246,9 @@ function MaterialsPage() {
   const [materials, setMaterials] = React.useState([]);
 
   React.useEffect(() => {
-    fetch('http://localhost:3000/api/v1/materials')
+    fetch('http://localhost:3000/api/v1/materials', {
+      headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+    })
       .then(r => r.json())
       .then(d => setMaterials(d))
       .catch(e => console.error(e));
@@ -121,42 +266,6 @@ function MaterialsPage() {
             <p><strong>Price:</strong> ₹{material.unit_price}</p>
             <p><strong>Stock:</strong> {material.stock_quantity}</p>
             <button className="btn-primary">Add to Cart</button>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function RewardsPage() {
-  const [rewards, setRewards] = React.useState([]);
-  const [wallet, setWallet] = React.useState(null);
-
-  React.useEffect(() => {
-    Promise.all([
-      fetch('http://localhost:3000/api/v1/rewards/catalog').then(r => r.json()),
-      fetch('http://localhost:3000/api/v1/rewards/wallet/1').then(r => r.json())
-    ]).then(([r, w]) => {
-      setRewards(r);
-      setWallet(w);
-    });
-  }, []);
-
-  return (
-    <div className="page">
-      <h2>�� Rewards & Loyalty</h2>
-      {wallet && <div className="wallet-card">
-        <p><strong>Points Balance:</strong> {wallet.available_points}</p>
-        <p><strong>Total Earned:</strong> {wallet.total_points}</p>
-        <p><strong>Tier:</strong> {wallet.tier}</p>
-      </div>}
-      <div className="rewards-grid">
-        {rewards.map(reward => (
-          <div key={reward.id} className="card">
-            <h4>{reward.name}</h4>
-            <p>{reward.description}</p>
-            <p><strong>Cost:</strong> {reward.points_required} points</p>
-            <button className="btn-primary">Redeem</button>
           </div>
         ))}
       </div>
@@ -187,6 +296,14 @@ function AttendancePage() {
         </div>
       </div>
     </div>
+  );
+}
+
+function Footer() {
+  return (
+    <footer className="footer">
+      <p>© 2024 I-Vendor Platform | Idea Vending Machine for Engineering Students</p>
+    </footer>
   );
 }
 

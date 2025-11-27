@@ -1,0 +1,255 @@
+.transaction-history {
+  padding: 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.transaction-history h1 {
+  color: #333;
+  margin-bottom: 2rem;
+  font-size: 2.5rem;
+}
+
+.transaction-history.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  font-size: 1.2rem;
+  color: #666;
+}
+
+.error-banner {
+  background: #ffebee;
+  color: #c62828;
+  padding: 1rem;
+  border-radius: 6px;
+  margin-bottom: 1rem;
+  border-left: 4px solid #c62828;
+}
+
+.filter-section {
+  background: white;
+  padding: 1.5rem;
+  border-radius: 10px;
+  margin-bottom: 2rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.filter-section h3 {
+  margin: 0 0 1rem 0;
+  color: #333;
+  font-size: 1rem;
+}
+
+.filter-buttons {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.filter-btn {
+  padding: 0.5rem 1.5rem;
+  border: 2px solid #e0e0e0;
+  background: white;
+  color: #666;
+  border-radius: 20px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+.filter-btn:hover {
+  border-color: #667eea;
+  color: #667eea;
+}
+
+.filter-btn.active {
+  background: #667eea;
+  color: white;
+  border-color: #667eea;
+}
+
+.history-sections {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+}
+
+.transactions-section,
+.redemptions-section {
+  background: white;
+  padding: 2rem;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.transactions-section h2,
+.redemptions-section h2 {
+  margin-top: 0;
+  color: #333;
+  margin-bottom: 1.5rem;
+}
+
+.transactions-list,
+.redemptions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.transaction-item {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 1.5rem;
+  align-items: center;
+  padding: 1.5rem;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border-left: 4px solid #667eea;
+}
+
+.transaction-item.redeem {
+  border-left-color: #F44336;
+}
+
+.tx-icon {
+  font-size: 1.5rem;
+  font-weight: bold;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #667eea;
+  color: white;
+  border-radius: 50%;
+}
+
+.transaction-item.redeem .tx-icon {
+  background: #F44336;
+}
+
+.tx-details h4 {
+  margin: 0 0 0.25rem 0;
+  color: #333;
+  font-weight: 600;
+}
+
+.tx-details .tx-date {
+  margin: 0;
+  color: #999;
+  font-size: 0.85rem;
+}
+
+.tx-points {
+  font-size: 1.3rem;
+  font-weight: bold;
+  text-align: right;
+}
+
+.tx-points.positive {
+  color: #4CAF50;
+}
+
+.tx-points.negative {
+  color: #F44336;
+}
+
+.redemption-item {
+  padding: 1.5rem;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border-left: 4px solid #764ba2;
+}
+
+.redemption-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.redemption-header h4 {
+  margin: 0;
+  color: #333;
+  font-size: 1rem;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 0.3rem 0.8rem;
+  border-radius: 4px;
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.redemption-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.redemption-details p {
+  margin: 0;
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.redemption-details strong {
+  color: #333;
+  font-weight: 600;
+}
+
+.redemption-id {
+  color: #999 !important;
+  font-size: 0.8rem !important;
+  font-family: 'Courier New', monospace;
+}
+
+.redemption-date {
+  color: #999 !important;
+  font-size: 0.85rem !important;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 2rem;
+  color: #999;
+  font-size: 1rem;
+}
+
+@media (max-width: 768px) {
+  .transaction-history {
+    padding: 1rem;
+  }
+
+  .transaction-history h1 {
+    font-size: 1.8rem;
+  }
+
+  .history-sections {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .filter-buttons {
+    flex-direction: column;
+  }
+
+  .filter-btn {
+    width: 100%;
+  }
+
+  .transaction-item {
+    grid-template-columns: auto 1fr;
+    gap: 1rem;
+  }
+
+  .tx-points {
+    grid-column: 2;
+    text-align: left;
+  }
+}
