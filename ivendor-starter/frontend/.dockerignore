@@ -7,7 +7,6 @@ npm-debug.log
 .DS_Store
 *.md
 dist
-src
 public
 .github
 k8s

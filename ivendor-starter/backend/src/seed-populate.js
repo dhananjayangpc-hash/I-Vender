@@ -24,7 +24,7 @@ class SeedEngine {
       // Seed ideas
       for (const idea of seedData.ideas) {
         await client.query(
-          `INSERT INTO ideas (title, problem_statement, concept_overview, department_id, idea_source_id, 
+          `INSERT INTO ideas (title, problem_statement, concept_overview, department_id, source_id, 
            difficulty, estimated_time_weeks, estimated_cost, budget_min, budget_max, 
            time_min_weeks, time_max_weeks, category, status)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
@@ -49,14 +49,29 @@ class SeedEngine {
 
       // Seed mentors
       for (const mentor of seedData.mentors) {
-        await client.query(
-          `INSERT INTO mentors (name, email, specializations, experience_years, hourly_rate, verification_status)
-           VALUES ($1, $2, $3, $4, $5, $6)`,
+        // Create a user record for the mentor (password is a seeded placeholder)
+        const userRes = await client.query(
+          `INSERT INTO users (name, email, password_hash, department_id, role, status)
+           VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
           [
             mentor.name,
             mentor.email,
+            'seeded_password',
+            deptMap[mentor.department_name] || null,
+            'mentor',
+            'active'
+          ]
+        );
+        const userId = userRes.rows[0].id;
+
+        await client.query(
+          `INSERT INTO mentors (user_id, specializations, experience_years, bio, hourly_rate, verification_status)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+          [
+            userId,
             JSON.stringify(mentor.specializations),
             mentor.experience_years,
+            mentor.bio || null,
             mentor.hourly_rate,
             'verified'
           ]
@@ -67,14 +82,14 @@ class SeedEngine {
       const vendorIds = {};
       for (const vendor of seedData.vendors) {
         const result = await client.query(
-          `INSERT INTO material_vendors (name, shop_type, location, commission_percentage, verification_status)
+          `INSERT INTO material_vendors (name, shop_type, location, commission_percentage, verified)
            VALUES ($1, $2, $3, $4, $5) RETURNING id`,
           [
             vendor.name,
             vendor.shop_type,
             vendor.location,
             vendor.commission_percentage,
-            'verified'
+            true
           ]
         );
         vendorIds[vendor.name] = result.rows[0].id;
@@ -99,7 +114,7 @@ class SeedEngine {
 
       for (const material of materials) {
         await client.query(
-          `INSERT INTO materials (name, category, unit_price, stock_quantity, material_vendor_id, status)
+          `INSERT INTO materials (name, category, unit_price, stock_quantity, vendor_id, status)
            VALUES ($1, $2, $3, $4, $5, $6)`,
           [
             material.name,
@@ -107,7 +122,7 @@ class SeedEngine {
             material.price,
             material.qty,
             vendorIds[material.vendor],
-            'available'
+            'active'
           ]
         );
       }
@@ -116,31 +131,41 @@ class SeedEngine {
       const bundles = [
         { name: 'Robotics Kit', description: 'Complete beginner', price: 15000, type: 'kit' },
         { name: 'IoT Sensor Kit', description: 'IoT prototyping', price: 5000, type: 'kit' },
-        { name: 'CNC Service', description: 'Professional cutting', price: 8000, type: 'service' },
-        { name: '3D Printing', description: 'Professional printing', price: 5000, type: 'service' },
-        { name: 'Lab Access', description: '1 month rental', price: 10000, type: 'rental' }
+        { name: 'CNC Service', description: 'Professional cutting', price: 8000, type: 'fabrication' },
+        { name: '3D Printing', description: 'Professional printing', price: 5000, type: 'printing_3d' },
+        { name: 'Lab Access', description: '1 month rental', price: 10000, type: 'lab_access' }
       ];
+
+      // Choose a default vendor for bundles (fallback to first vendor)
+      const defaultVendorId = vendorIds['Campus Tools & Kits'] || Object.values(vendorIds)[0];
 
       for (const bundle of bundles) {
         await client.query(
-          `INSERT INTO service_bundles (name, description, price, bundle_type, status)
-           VALUES ($1, $2, $3, $4, $5)`,
+          `INSERT INTO service_bundles (vendor_id, name, description, price, service_type, status)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
           [
+            defaultVendorId,
             bundle.name,
             bundle.description,
             bundle.price,
             bundle.type,
-            'available'
+            'active'
           ]
         );
       }
 
       // Seed RBVM machines
       for (let i = 1; i <= 5; i++) {
+        const code = `RBVM-00${i}`;
         await client.query(
-          `INSERT INTO rbvm_machines (machine_code, location, points_per_bottle, status)
+          `INSERT INTO rbvm_machines (location, model, status, metadata)
            VALUES ($1, $2, $3, $4)`,
-          [`RBVM-00${i}`, ['Main Entrance', 'Cafeteria', 'Library', 'Sports', 'Tech Center'][i-1], 5, 'active']
+          [
+            ['Main Entrance', 'Cafeteria', 'Library', 'Sports', 'Tech Center'][i-1],
+            'RBVM-Model-A',
+            'active',
+            JSON.stringify({ machine_code: code, points_per_bottle: 5 })
+          ]
         );
       }
 
@@ -154,15 +179,18 @@ class SeedEngine {
       ];
 
       for (const reward of rewards) {
+        // Map reward types to schema's allowed values
+        const type = reward.name.includes('Gift Card') ? 'coupon' : (reward.name.includes('Mentor') ? 'lab_access' : 'merchandise');
         await client.query(
-          `INSERT INTO rewards_catalog (name, description, points_required, quantity_available, status)
-           VALUES ($1, $2, $3, $4, $5)`,
+          `INSERT INTO rewards_catalog (title, description, reward_type, points_required, max_redemptions, status)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
           [
             reward.name,
             reward.description,
+            type,
             reward.points,
             reward.qty,
-            'available'
+            'active'
           ]
         );
       }
@@ -170,12 +198,13 @@ class SeedEngine {
       // Seed users
       for (const student of seedData.students) {
         const deptId = deptMap[student.department_name];
-        const userId = await client.query(
-          `INSERT INTO users (name, email, department_id, role, status)
-           VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+        const userRes = await client.query(
+          `INSERT INTO users (name, email, password_hash, department_id, role, status)
+           VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
           [
             student.name,
             student.email,
+            'seeded_password',
             deptId,
             'student',
             'active'
@@ -183,14 +212,13 @@ class SeedEngine {
         );
 
         await client.query(
-          `INSERT INTO rewards_wallet (user_id, total_points, available_points, tier, status)
-           VALUES ($1, $2, $3, $4, $5)`,
+          `INSERT INTO rewards_wallet (student_id, total_points, available_points, current_tier)
+           VALUES ($1, $2, $3, $4)`,
           [
-            userId.rows[0].id,
+            userRes.rows[0].id,
             Math.floor(Math.random() * 1000) + 200,
             Math.floor(Math.random() * 800) + 100,
-            'bronze',
-            'active'
+            'bronze'
           ]
         );
       }
